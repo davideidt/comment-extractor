@@ -3,7 +3,7 @@ import pandas as pd
 from googleapiclient.discovery import build
 
 # YouTube API Key (Replace with your actual API key)
-API_KEY = "YOUR_YOUTUBE_API_KEY"
+API_KEY = "AIzaSyASlTP2fu_FPO2bUMhc0JCTAqyWAur9A1Y"
 
 # Function to extract video ID from URL
 import re
