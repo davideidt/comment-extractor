@@ -3,3 +3,5 @@ openai
 google-api-python-client
 pandas
 streamlit
+matplotlib
+wordcloud
