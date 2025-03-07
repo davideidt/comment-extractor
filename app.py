@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import re
 import openai
-from youtube_transcript_api import YouTubeTranscriptApi
+import matplotlib.pyplot as plt
+from collections import Counter
+from wordcloud import WordCloud
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -21,11 +24,11 @@ def extract_video_id(url):
         match = re.search(r"shorts/([a-zA-Z0-9_-]{11})", url)  # Shorts URL
     return match.group(1) if match else None
 
-# Function to fetch comments and replies
+# Function to fetch YouTube comments and replies
 def get_comments(video_id):
     youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
     comments = []
-    
+
     try:
         request = youtube.commentThreads().list(
             part="snippet,replies",
@@ -36,36 +39,45 @@ def get_comments(video_id):
 
         for item in response.get("items", []):
             top_comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-            comments.append(f"Comment: {top_comment}")
+            comments.append(top_comment)
 
             # Get replies if available
             if "replies" in item:
                 for reply in item["replies"]["comments"]:
                     reply_text = reply["snippet"]["textDisplay"]
-                    comments.append(f"Reply: {reply_text}")
+                    comments.append(reply_text)
 
-        return "\n".join(comments)  # Return as a single text block
+        return comments if comments else ["No comments found."]
 
     except HttpError as e:
         st.error(f"Google API Error: {e}")
-        return ""
+        return ["Error fetching comments."]
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
-        return ""
+        return ["Error fetching comments."]
 
-# Function to fetch transcript
+# Function to fetch YouTube transcript
 def get_transcript(video_id):
     try:
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
         transcript_text = " ".join([t['text'] for t in transcript_list])
         return transcript_text
-    except:
-        st.warning("Transcript unavailable for this video.")
-        return ""
+    except TranscriptsDisabled:
+        st.warning("Transcript is disabled or unavailable for this video.")
+        return "Transcript unavailable."
+    except Exception:
+        st.warning("An error occurred while fetching the transcript.")
+        return "Transcript unavailable."
 
-# Function to analyze content gaps with OpenAI
-def analyze_content(transcript, comments):
+# Function to extract keyword trends
+def extract_keywords(text, top_n=10):
+    words = text.lower().split()
+    common_words = Counter(words).most_common(top_n)
+    return [word for word, count in common_words]
+
+# Function to analyze content gaps using OpenAI
+def analyze_content(transcript, comments, keywords):
     system_prompt = """
     You are an expert in ADHD relationship coaching, analyzing YouTube content to identify content gaps.
     The audience struggles with ADHD-related relationship challenges, including communication breakdowns, misunderstandings, emotional dysregulation, and burnout.
@@ -78,11 +90,14 @@ def analyze_content(transcript, comments):
     user_prompt = f"""
     Here is a YouTube video transcript and audience comments. Identify content gaps that would resonate with an ADHD audience.
 
+    ### Trending Keywords:
+    {', '.join(keywords)}
+
     ### Video Transcript:
     {transcript}
 
     ### Comments & Replies:
-    {comments}
+    {', '.join(comments)}
 
     What insights can you provide on missing or underdeveloped topics?
     """
@@ -100,9 +115,17 @@ def analyze_content(transcript, comments):
         st.error(f"Error fetching AI analysis: {e}")
         return "Error analyzing content."
 
+# Function to generate word cloud
+def generate_wordcloud(text):
+    wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation="bilinear")
+    plt.axis("off")
+    st.pyplot(plt)
+
 # Streamlit UI
 st.title("YouTube Content Gap Analyzer")
-st.write("Paste a YouTube link to extract transcript, comments, and get an AI-generated content gap analysis.")
+st.write("Paste a YouTube link to extract transcript, comments, keyword trends, and AI-generated content gap analysis.")
 
 video_url = st.text_input("Enter YouTube Video URL")
 
@@ -113,17 +136,28 @@ if st.button("Analyze Video"):
         st.info("Fetching transcript and comments...")
         transcript = get_transcript(video_id)
         comments = get_comments(video_id)
+        all_text = transcript + " " + " ".join(comments)
 
-        if transcript or comments:
-            st.success("Data extracted successfully! Sending to ChatGPT for analysis...")
-            insights = analyze_content(transcript, comments)
+        if transcript != "Transcript unavailable." or comments != ["No comments found."]:
+            keywords = extract_keywords(all_text, top_n=10)
+
+            st.success("Data extracted successfully! Generating insights...")
             
-            # Display AI Analysis
-            st.subheader("AI Content Gap Analysis:")
+            # Show trending keywords
+            st.subheader("🔍 Trending Keywords")
+            st.write(", ".join(keywords))
+
+            # Generate word cloud
+            st.subheader("📊 Audience Engagement Word Cloud")
+            generate_wordcloud(all_text)
+
+            # AI Content Analysis
+            insights = analyze_content(transcript, comments, keywords)
+            st.subheader("🤖 AI Content Gap Analysis")
             st.write(insights)
             
             # Save to file
-            full_data = f"### Video Transcript:\n{transcript}\n\n### Comments & Replies:\n{comments}\n\n### AI Analysis:\n{insights}"
+            full_data = f"### Trending Keywords:\n{', '.join(keywords)}\n\n### Video Transcript:\n{transcript}\n\n### Comments & Replies:\n{', '.join(comments)}\n\n### AI Analysis:\n{insights}"
             st.download_button("Download Analysis", full_data.encode('utf-8'), file_name="content_analysis.txt", mime="text/plain")
 
         else:
