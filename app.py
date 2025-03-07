@@ -13,7 +13,8 @@ from googleapiclient.errors import HttpError
 YOUTUBE_API_KEY = st.secrets["YOUTUBE_API_KEY"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
-openai.api_key = OPENAI_API_KEY
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # Function to extract video ID from URL
 def extract_video_id(url):
@@ -79,38 +80,41 @@ def extract_keywords(text, top_n=10):
 # Function to analyze content gaps using OpenAI
 def analyze_content(transcript, comments, keywords):
     system_prompt = """
-    You are an expert in ADHD relationship coaching, analyzing YouTube content to identify content gaps.
-    The audience struggles with ADHD-related relationship challenges, including communication breakdowns, misunderstandings, emotional dysregulation, and burnout.
-    Your goal is to review the video transcript and audience comments to determine:
-    - What topics are covered well?
-    - What questions or pain points remain unaddressed?
-    - What content could better resonate with this audience?
+    You are an expert in ADHD and emotional regulation for professionals who feel overwhelmed, burned out, and disconnected from themselves and their relationships.
+    
+    The audience consists of high-responsibility professionals (managers, executives, healthcare workers, and specialists) who are struggling with emotional regulation, masking, burnout, and self-doubt.
+
+    They appear successful but feel exhausted inside. They struggle with relationship tension, perfectionism, and fear of losing control. Their main concerns:
+    - "Why am I snapping at my partner/kids when I don’t mean to?"
+    - "Why can’t I switch off work stress and be present at home?"
+    - "How do I stay motivated without burning myself out?"
+    - "Why does it feel like I’ve lost myself?"
+    
+    Your goal: Analyze the transcript & audience comments to determine:
+    - What topics are **already addressed**?
+    - What **pain points remain unspoken**?
+    - What **content gaps exist** that could deeply resonate with this audience?
     """
 
     user_prompt = f"""
-    Here is a YouTube video transcript and audience comments. Identify content gaps that would resonate with an ADHD audience.
+    **Trending Keywords:** {', '.join(keywords)}
 
-    ### Trending Keywords:
-    {', '.join(keywords)}
+    **Video Transcript:** {transcript}
 
-    ### Video Transcript:
-    {transcript}
-
-    ### Comments & Replies:
-    {', '.join(comments)}
+    **Comments & Replies:** {', '.join(comments)}
 
     What insights can you provide on missing or underdeveloped topics?
     """
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
         )
-        return response["choices"][0]["message"]["content"]
+        return response.choices[0].message.content
     except Exception as e:
         st.error(f"Error fetching AI analysis: {e}")
         return "Error analyzing content."
@@ -124,7 +128,7 @@ def generate_wordcloud(text):
     st.pyplot(plt)
 
 # Streamlit UI
-st.title("YouTube Content Gap Analyzer")
+st.title("YouTube Content Gap Analyzer for Professionals")
 st.write("Paste a YouTube link to extract transcript, comments, keyword trends, and AI-generated content gap analysis.")
 
 video_url = st.text_input("Enter YouTube Video URL")
