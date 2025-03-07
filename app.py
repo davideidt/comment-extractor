@@ -6,12 +6,26 @@ from googleapiclient.discovery import build
 API_KEY = "YOUR_YOUTUBE_API_KEY"
 
 # Function to extract video ID from URL
+import re
+
 def extract_video_id(url):
-    if "youtube.com/watch?v=" in url:
-        return url.split("v=")[1].split("&")[0]
-    elif "youtu.be/" in url:
-        return url.split("youtu.be/")[1].split("?")[0]
-    return None
+    # Extract from standard YouTube URL
+    match = re.search(r"v=([a-zA-Z0-9_-]{11})", url)
+    if match:
+        return match.group(1)
+    
+    # Extract from shortened YouTube URL
+    match = re.search(r"youtu\.be/([a-zA-Z0-9_-]{11})", url)
+    if match:
+        return match.group(1)
+
+    # Extract from YouTube Shorts URL
+    match = re.search(r"shorts/([a-zA-Z0-9_-]{11})", url)
+    if match:
+        return match.group(1)
+    
+    return None  # If no valid video ID found
+
 
 # Function to fetch comments and replies
 def get_comments(video_id):
